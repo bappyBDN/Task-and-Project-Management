@@ -1,0 +1,58 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: anwar-db
+    environment:
+      POSTGRES_USER: anwar
+      POSTGRES_PASSWORD: anwar_pw_change_me
+      POSTGRES_DB: anwar_task_manager
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "0.0.0.0:5432:5432"          # optional — lets you connect from a DB client on your machine
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U anwar"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    container_name: anwar-backend
+    env_file:
+      - ./backend/.env       # Gmail, JWT secret, etc. — DATABASE_URL below overrides whatever's in this file
+    environment:
+      DATABASE_URL: postgresql://anwar:anwar_pw_change_me@db:5432/anwar_task_manager
+      RUN_SCHEDULER_IN_PROCESS: "false"   # the separate `scheduler` service handles this instead
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "0.0.0.0:8001:8000"
+    restart: unless-stopped
+
+  scheduler:
+    build: ./backend         # same image as backend, just a different command
+    container_name: anwar-scheduler
+    command: ["python", "-m", "app.scheduler_worker"]
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql://anwar:anwar_pw_change_me@db:5432/anwar_task_manager
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: anwar-frontend
+    depends_on:
+      - backend
+    ports:
+      - "0.0.0.0:5173:80"
+    restart: unless-stopped
+
+volumes:
+  db_data:
