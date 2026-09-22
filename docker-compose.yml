@@ -1,33 +1,18 @@
 services:
-  db:
-    image: postgres:16-alpine
-    container_name: anwar-db
-    environment:
-      POSTGRES_USER: anwar
-      POSTGRES_PASSWORD: anwar_pw_change_me
-      POSTGRES_DB: anwar_task_manager
-    volumes:
-      - db_data:/var/lib/postgresql/data
-    ports:
-      - "0.0.0.0:5432:5432"          # optional — lets you connect from a DB client on your machine
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U anwar"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
-
   backend:
     build: ./backend
     container_name: anwar-backend
-    env_file:
-      - ./backend/.env       # Gmail, JWT secret, etc. — DATABASE_URL below overrides whatever's in this file
     environment:
-      DATABASE_URL: postgresql://anwar:anwar_pw_change_me@db:5432/anwar_task_manager
+      DATABASE_URL: ${DATABASE_URL}
+      GMAIL_USER: ${GMAIL_USER}
+      GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD}
+      MAIL_ENABLED: ${MAIL_ENABLED:-true}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      EMAIL_SCAN_INTERVAL_MINUTES: ${EMAIL_SCAN_INTERVAL_MINUTES:-60}
+      TASK_DUE_LOOKAHEAD_DAYS: ${TASK_DUE_LOOKAHEAD_DAYS:-3}
+      BACKLOG_STALE_DAYS: ${BACKLOG_STALE_DAYS:-7}
       RUN_SCHEDULER_IN_PROCESS: "false"   # the separate `scheduler` service handles this instead
-    depends_on:
-      db:
-        condition: service_healthy
     ports:
       - "0.0.0.0:8001:8000"
     restart: unless-stopped
@@ -36,13 +21,14 @@ services:
     build: ./backend         # same image as backend, just a different command
     container_name: anwar-scheduler
     command: ["python", "-m", "app.scheduler_worker"]
-    env_file:
-      - ./backend/.env
     environment:
-      DATABASE_URL: postgresql://anwar:anwar_pw_change_me@db:5432/anwar_task_manager
-    depends_on:
-      db:
-        condition: service_healthy
+      DATABASE_URL: ${DATABASE_URL}
+      GMAIL_USER: ${GMAIL_USER}
+      GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD}
+      MAIL_ENABLED: ${MAIL_ENABLED:-true}
+      EMAIL_SCAN_INTERVAL_MINUTES: ${EMAIL_SCAN_INTERVAL_MINUTES:-60}
+      TASK_DUE_LOOKAHEAD_DAYS: ${TASK_DUE_LOOKAHEAD_DAYS:-3}
+      BACKLOG_STALE_DAYS: ${BACKLOG_STALE_DAYS:-7}
     restart: unless-stopped
 
   frontend:
@@ -53,6 +39,3 @@ services:
     ports:
       - "0.0.0.0:5173:80"
     restart: unless-stopped
-
-volumes:
-  db_data:
